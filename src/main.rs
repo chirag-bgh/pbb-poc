@@ -1,10 +1,4 @@
-// use utils::bytecode_to_evmcode;
-// use utils::get_tx_env;
-
 use pbb_poc::pbb::run;
-use reth_primitives::revm::env::block_coinbase;
-use reth_primitives::revm_primitives::EVMError;
-
 use reth_primitives::TransactionSigned;
 use serde::{Deserialize, Serialize};
 
