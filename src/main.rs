@@ -23,9 +23,7 @@ async fn send_rpc_request() -> eyre::Result<RpcResponse<Vec<TransactionSigned>>,
     let res = client
         .post("http://localhost:8545/")
         .header("Content-Type", "application/json")
-        .body(
-            r#"{"jsonrpc":"2.0","method":"txpoolExt_getCensoredTransactions","params":[],"id":1}"#,
-        )
+        .body(r#"{"jsonrpc":"2.0","method":"eth_getBestTransactions","params":[],"id":1}"#)
         .send()
         .await?;
     let rpc_response = res.json::<RpcResponse<Vec<TransactionSigned>>>().await?;
