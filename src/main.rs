@@ -1,14 +1,20 @@
+use log::info;
 use pbb_poc::pbb::run;
 use reth_primitives::TransactionSigned;
 use serde::{Deserialize, Serialize};
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
+    info!("Starting PBB PoC");
+
     let txs = send_rpc_request()
         .await
         .expect("Failed to send RPC request")
         .result;
-    run(txs);
+    let result = run(txs);
+    println!("{:?}", result);
 }
 
 #[derive(Serialize, Deserialize, Debug)]

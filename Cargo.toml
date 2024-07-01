@@ -8,17 +8,19 @@ clap = "4.4.11"
 jsonrpsee = "0.22"
 tokio = { version = "1.21", default-features = false }
 
-thiserror = "1.0.50"
 eyre = "0.6.10"
-anyhow = "1.0.75"
 reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tracing = { version = "0.1", features = ["log"] }
+env_logger = "0.10"
 
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
 reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
-reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
+reth-beacon-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
+reth-blockchain-tree = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
+reth-revm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
+reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
 
 pevm = { path = "../pevm"}

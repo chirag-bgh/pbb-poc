@@ -1,8 +1,10 @@
+use log::info;
 use pevm::execute_revm;
 use pevm::AccountBasic;
 use pevm::BlobExcessGasAndPrice;
 use pevm::EvmAccount;
 use pevm::InMemoryStorage;
+use pevm::PevmResult;
 use pevm::PevmUserType;
 use pevm::CANCUN;
 use reth_chainspec::ChainSpec;
@@ -11,7 +13,6 @@ use reth_primitives::revm_primitives::EVMError;
 use reth_primitives::Address;
 use reth_primitives::TransactionSigned;
 use reth_primitives::U256;
-use tracing::info;
 
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
@@ -19,27 +20,27 @@ use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 
-use reth::beacon_consensus::EthBeaconConsensus;
-use reth::blockchain_tree::BlockchainTree;
-use reth::blockchain_tree::BlockchainTreeConfig;
-use reth::blockchain_tree::ShareableBlockchainTree;
-use reth::blockchain_tree::TreeExternals;
+use reth_beacon_consensus::EthBeaconConsensus;
+use reth_blockchain_tree::BlockchainTree;
+use reth_blockchain_tree::BlockchainTreeConfig;
+use reth_blockchain_tree::ShareableBlockchainTree;
+use reth_blockchain_tree::TreeExternals;
 
-use reth::providers::providers::BlockchainProvider;
-use reth::providers::providers::StaticFileProvider;
-use reth::providers::BlockReaderIdExt;
-use reth::providers::ProviderFactory;
-use reth::providers::StateProviderFactory;
-use reth::revm::database::StateProviderDatabase;
-use reth::revm::db::CacheDB;
-use reth::revm::interpreter::gas::ZERO;
-use reth::utils::db::open_db_read_only;
+use reth_provider::providers::BlockchainProvider;
+use reth_provider::providers::StaticFileProvider;
+use reth_provider::BlockReaderIdExt;
+use reth_provider::ProviderFactory;
+use reth_provider::StateProviderFactory;
+use reth_revm::database::StateProviderDatabase;
+use reth_revm::db::CacheDB;
+use reth_revm::interpreter::gas::ZERO;
+use reth_db::open_db_read_only;
 use reth_chainspec::HOLESKY;
 use reth_node_ethereum::EthExecutorProvider;
 
 use crate::utils::{bytecode_to_evmcode, get_tx_env};
 
-pub fn run(txs_signed: Vec<TransactionSigned>) {
+pub fn run(txs_signed: Vec<TransactionSigned>) -> PevmResult {
     let db_path = Path::new("/Users/chirag-bgh/Library/Application Support/reth/holesky/db");
     let db = Arc::new(open_db_read_only(db_path, Default::default()).unwrap());
 
@@ -143,9 +144,11 @@ pub fn run(txs_signed: Vec<TransactionSigned>) {
     match pevm_result {
         Ok(_) => {
             info!("txs executed successfully");
+            pevm_result
         }
         Err(e) => {
             info!("Error executing txs: {:?}", e);
+            Err(e)
         }
     }
 }
