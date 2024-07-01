@@ -9,7 +9,7 @@ jsonrpsee = "0.22"
 tokio = { version = "1.21", default-features = false }
 
 eyre = "0.6.10"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 env_logger = "0.10"
@@ -22,5 +22,11 @@ reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.
 reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
 reth-revm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
 reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
+reth-rpc-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.0.0" }
+mev-share-sse = { version = "0.3.0", default-features = false }
+
 
 pevm = { path = "../pevm"}
+serde_json = "1.0.119"
+futures-util = "0.3.30"
+tokio-util = "0.7.11"

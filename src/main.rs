@@ -1,4 +1,5 @@
 use log::info;
+use pbb_poc::lighthouse::BeaconEventsConfig;
 use pbb_poc::pbb::run;
 use reth_primitives::TransactionSigned;
 use serde::{Deserialize, Serialize};
@@ -9,12 +10,18 @@ async fn main() {
 
     info!("Starting PBB PoC");
 
-    let txs = send_rpc_request()
+    let txs = eth_get_best_transactions()
         .await
         .expect("Failed to send RPC request")
         .result;
-    let result = run(txs);
-    println!("{:?}", result);
+
+    let beacon_client = BeaconEventsConfig::new();
+    let payload_attrilbutes = beacon_client.run().await.unwrap().data.payload_attributes;
+    let pevm_result = run(txs, payload_attrilbutes);
+    match pevm_result {
+        Ok(_) => info!("PBB PoC completed successfully"),
+        Err(e) => info!("PBB PoC failed: {:?}", e),
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -24,7 +31,8 @@ struct RpcResponse<T> {
     id: u32,
 }
 
-async fn send_rpc_request() -> eyre::Result<RpcResponse<Vec<TransactionSigned>>, reqwest::Error> {
+async fn eth_get_best_transactions(
+) -> eyre::Result<RpcResponse<Vec<TransactionSigned>>, reqwest::Error> {
     let client = reqwest::Client::new();
     let res = client
         .post("http://localhost:8545/")

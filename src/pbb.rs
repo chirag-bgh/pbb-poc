@@ -8,11 +8,13 @@ use pevm::PevmResult;
 use pevm::PevmUserType;
 use pevm::CANCUN;
 use reth_chainspec::ChainSpec;
-use reth_primitives::revm::env::block_coinbase;
+use reth_primitives::revm::config::revm_spec_by_timestamp_after_merge;
 use reth_primitives::revm_primitives::EVMError;
 use reth_primitives::Address;
 use reth_primitives::TransactionSigned;
 use reth_primitives::U256;
+use reth_revm::primitives::SpecId;
+use reth_rpc_types::engine::PayloadAttributes;
 
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
@@ -26,6 +28,9 @@ use reth_blockchain_tree::BlockchainTreeConfig;
 use reth_blockchain_tree::ShareableBlockchainTree;
 use reth_blockchain_tree::TreeExternals;
 
+use reth_chainspec::HOLESKY;
+use reth_db::open_db_read_only;
+use reth_node_ethereum::EthExecutorProvider;
 use reth_provider::providers::BlockchainProvider;
 use reth_provider::providers::StaticFileProvider;
 use reth_provider::BlockReaderIdExt;
@@ -34,13 +39,13 @@ use reth_provider::StateProviderFactory;
 use reth_revm::database::StateProviderDatabase;
 use reth_revm::db::CacheDB;
 use reth_revm::interpreter::gas::ZERO;
-use reth_db::open_db_read_only;
-use reth_chainspec::HOLESKY;
-use reth_node_ethereum::EthExecutorProvider;
 
 use crate::utils::{bytecode_to_evmcode, get_tx_env};
 
-pub fn run(txs_signed: Vec<TransactionSigned>) -> PevmResult {
+pub fn run(
+    txs_signed: Vec<TransactionSigned>,
+    payload_attributes: PayloadAttributes,
+) -> PevmResult {
     let db_path = Path::new("/Users/chirag-bgh/Library/Application Support/reth/holesky/db");
     let db = Arc::new(open_db_read_only(db_path, Default::default()).unwrap());
 
@@ -106,21 +111,33 @@ pub fn run(txs_signed: Vec<TransactionSigned>) -> PevmResult {
     let pevm_storage = InMemoryStorage::new(accounts, block_hashes);
     let holesky = HOLESKY.clone();
 
-    let blob_excess_gas_and_price =
-        if let Some(execess_blog_gas) = latest_block_header.excess_blob_gas {
-            Some(BlobExcessGasAndPrice::new(execess_blog_gas))
-        } else {
-            None
-        };
+    let spec_id = revm_spec_by_timestamp_after_merge(&chain_spec, payload_attributes.timestamp);
+
+    let base_fee = latest_block_header
+        .header()
+        .next_block_base_fee(chain_spec.base_fee_params_at_timestamp(payload_attributes.timestamp));
+
+    let blob_excess_gas_and_price = latest_block_header
+        .header()
+        .next_block_excess_blob_gas()
+        .or_else(|| {
+            if spec_id == SpecId::CANCUN {
+                // default excess blob gas is zero
+                Some(0)
+            } else {
+                None
+            }
+        })
+        .map(BlobExcessGasAndPrice::new);
 
     let block_env = pevm::BlockEnv {
-        number: U256::from(latest_block_header.number),
-        timestamp: U256::from(latest_block_header.timestamp),
-        coinbase: block_coinbase(&chain_spec, latest_block_header.header(), true),
+        number: U256::from(latest_block_header.number + 1),
+        timestamp: U256::from(payload_attributes.timestamp),
+        coinbase: payload_attributes.suggested_fee_recipient,
         gas_limit: U256::from(latest_block_header.gas_limit),
-        basefee: U256::from(latest_block_header.base_fee_per_gas.unwrap_or_default()),
+        basefee: base_fee.map(U256::from).unwrap_or_default(),
         difficulty: U256::from(ZERO),
-        prevrandao: Some(latest_block_header.mix_hash),
+        prevrandao: Some(payload_attributes.prev_randao),
         blob_excess_gas_and_price,
     };
 
