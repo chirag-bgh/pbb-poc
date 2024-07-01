@@ -1,5 +1,6 @@
 use log::info;
 use pevm::execute_revm;
+use pevm::execute_revm_sequential;
 use pevm::AccountBasic;
 use pevm::BlobExcessGasAndPrice;
 use pevm::EvmAccount;
@@ -146,22 +147,30 @@ pub fn run(
         .map(|tx_signed| get_tx_env(tx_signed))
         .collect();
 
-    let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
+    // let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
 
-    let pevm_result = execute_revm(
+    let sequestional_result = execute_revm_sequential(
         pevm_storage,
         holesky.chain,
         CANCUN,
         block_env,
         transactions_envs,
-        concurrency_level,
-        PevmUserType::BlockBuilder,
     );
 
-    match pevm_result {
+    // let pevm_result = execute_revm(
+    //     pevm_storage,
+    //     holesky.chain,
+    //     CANCUN,
+    //     block_env,
+    //     transactions_envs,
+    //     concurrency_level,
+    //     PevmUserType::BlockBuilder,
+    // );
+
+    match sequestional_result {
         Ok(_) => {
             info!("txs executed successfully");
-            pevm_result
+            sequestional_result
         }
         Err(e) => {
             info!("Error executing txs: {:?}", e);

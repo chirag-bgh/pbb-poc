@@ -1,5 +1,5 @@
 use futures_util::stream::StreamExt;
-use log::{info, warn};
+use log::warn;
 use mev_share_sse::{
     client::{EventStream, SseError},
     EventClient,
@@ -27,12 +27,12 @@ impl BeaconEventsConfig {
     }
 
     /// Returns the http url of the beacon node
-    pub fn http_base_url(&self) -> String {
+    fn http_base_url(&self) -> String {
         format!("http://{}:{}", self.cl_addr, self.cl_port)
     }
 
     /// Returns the URL to the events endpoint
-    pub fn events_url(&self) -> String {
+    fn events_url(&self) -> String {
         format!("{}/eth/v1/events", self.http_base_url())
     }
 
@@ -40,12 +40,11 @@ impl BeaconEventsConfig {
     pub async fn run(self) -> Result<PayloadAttributesEvent, SseError> {
         let client = EventClient::default();
         let mut subscription = self.new_payload_attributes_subscription(&client).await;
-        let event = subscription.next().await.unwrap();
-        event
+        subscription.next().await.unwrap()
     }
 
     // It can take a bit until the CL endpoint is live so we retry a few times
-    pub async fn new_payload_attributes_subscription(
+    async fn new_payload_attributes_subscription(
         &self,
         client: &EventClient,
     ) -> EventStream<PayloadAttributesEvent> {

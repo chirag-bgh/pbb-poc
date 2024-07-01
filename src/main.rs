@@ -17,6 +17,7 @@ async fn main() {
 
     let beacon_client = BeaconEventsConfig::new();
     let payload_attrilbutes = beacon_client.run().await.unwrap().data.payload_attributes;
+
     let pevm_result = run(txs, payload_attrilbutes);
     match pevm_result {
         Ok(_) => info!("PBB PoC completed successfully"),
