@@ -120,7 +120,6 @@ pub fn get_tx_env(tx_signed: TransactionSigned) -> pevm::TxEnv {
 }
 
 pub fn bytecode_to_evmcode(bytecode: Bytecode) -> EvmCode {
-    // convert code to LegacyAnalyzed if it is LegacyRaw by using to_analysed
     let code = match bytecode {
         Bytecode::LegacyAnalyzed(code) => code,
         Bytecode::LegacyRaw(_) => to_analysed(bytecode),
