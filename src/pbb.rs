@@ -1,6 +1,5 @@
 use log::info;
 use pevm::execute_revm;
-use pevm::execute_revm_sequential;
 use pevm::AccountBasic;
 use pevm::BlobExcessGasAndPrice;
 use pevm::EvmAccount;
@@ -8,74 +7,36 @@ use pevm::InMemoryStorage;
 use pevm::PevmResult;
 use pevm::PevmUserType;
 use pevm::CANCUN;
-use reth_chainspec::ChainSpec;
 use reth_primitives::revm::config::revm_spec_by_timestamp_after_merge;
 use reth_primitives::revm_primitives::EVMError;
 use reth_primitives::Address;
 use reth_primitives::TransactionSigned;
 use reth_primitives::U256;
 use reth_revm::primitives::SpecId;
-use reth_rpc_types::engine::PayloadAttributes;
 
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
-use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 
-use reth_beacon_consensus::EthBeaconConsensus;
-use reth_blockchain_tree::BlockchainTree;
-use reth_blockchain_tree::BlockchainTreeConfig;
-use reth_blockchain_tree::ShareableBlockchainTree;
-use reth_blockchain_tree::TreeExternals;
-
 use reth_chainspec::HOLESKY;
-use reth_db::open_db_read_only;
-use reth_node_ethereum::EthExecutorProvider;
-use reth_provider::providers::BlockchainProvider;
-use reth_provider::providers::StaticFileProvider;
 use reth_provider::BlockReaderIdExt;
-use reth_provider::ProviderFactory;
 use reth_provider::StateProviderFactory;
 use reth_revm::database::StateProviderDatabase;
 use reth_revm::db::CacheDB;
 use reth_revm::interpreter::gas::ZERO;
 
+use crate::lighthouse::BeaconEventsConfig;
+use crate::reth_db::reth_db_provider;
+use crate::utils::chain_spec;
 use crate::utils::{bytecode_to_evmcode, get_tx_env};
 
-pub fn run(
-    txs_signed: Vec<TransactionSigned>,
-    payload_attributes: PayloadAttributes,
-) -> PevmResult {
-    let db_path = Path::new("/Users/chirag-bgh/Library/Application Support/reth/holesky/db");
-    let db = Arc::new(open_db_read_only(db_path, Default::default()).unwrap());
+pub async fn run_pevm(txs_signed: Vec<TransactionSigned>) -> PevmResult {
+    let provider = reth_db_provider();
+    let chain_spec = chain_spec();
 
-    let chain_spec = Arc::new(ChainSpec {
-        chain: HOLESKY.chain.clone(),
-        genesis: HOLESKY.genesis.clone(),
-        hardforks: HOLESKY.hardforks.clone(),
-        genesis_hash: Some(HOLESKY.genesis_hash()),
-        paris_block_and_final_difficulty: HOLESKY.paris_block_and_final_difficulty,
-        deposit_contract: HOLESKY.deposit_contract.clone(),
-        base_fee_params: HOLESKY.base_fee_params.clone(),
-        prune_delete_limit: HOLESKY.prune_delete_limit,
-    });
-    let factory = ProviderFactory::new(
-        db.clone(),
-        chain_spec.clone(),
-        StaticFileProvider::read_only(db_path.join("static_files")).unwrap(),
-    );
-    let provider = Arc::new({
-        let consensus = Arc::new(EthBeaconConsensus::new(chain_spec.clone()));
-        let executor = EthExecutorProvider::ethereum(chain_spec.clone());
-
-        let tree_externals = TreeExternals::new(factory.clone(), consensus, executor);
-        let tree =
-            BlockchainTree::new(tree_externals, BlockchainTreeConfig::default(), None).unwrap();
-        let blockchain_tree = Arc::new(ShareableBlockchainTree::new(tree));
-
-        BlockchainProvider::new(factory, blockchain_tree).unwrap()
-    });
+    let beacon_client = BeaconEventsConfig::new();
+    let payload_attributes = beacon_client.run().await.unwrap().data.payload_attributes;
 
     let latest_block_header = provider
         .latest_header()
@@ -147,30 +108,22 @@ pub fn run(
         .map(|tx_signed| get_tx_env(tx_signed))
         .collect();
 
-    // let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
+    let concurrency_level = thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
 
-    let sequestional_result = execute_revm_sequential(
+    let pevm_result = execute_revm(
         pevm_storage,
         holesky.chain,
         CANCUN,
         block_env,
         transactions_envs,
+        concurrency_level,
+        PevmUserType::BlockBuilder,
     );
 
-    // let pevm_result = execute_revm(
-    //     pevm_storage,
-    //     holesky.chain,
-    //     CANCUN,
-    //     block_env,
-    //     transactions_envs,
-    //     concurrency_level,
-    //     PevmUserType::BlockBuilder,
-    // );
-
-    match sequestional_result {
+    match pevm_result {
         Ok(_) => {
             info!("txs executed successfully");
-            sequestional_result
+            pevm_result
         }
         Err(e) => {
             info!("Error executing txs: {:?}", e);

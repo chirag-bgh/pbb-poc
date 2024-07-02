@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pevm::{EvmCode, TransactTo};
+use reth_chainspec::{ChainSpec, HOLESKY};
 use reth_primitives::revm_primitives::Bytecode;
 use reth_primitives::{Bytes, JumpTable, Transaction, TransactionSigned, TxKind, U256};
 use reth_revm::interpreter::opcode;
@@ -176,4 +177,127 @@ fn analyze(code: &[u8]) -> JumpTable {
     }
 
     JumpTable(Arc::new(jumps))
+}
+
+pub fn chain_spec() -> Arc<ChainSpec> {
+    Arc::new(ChainSpec {
+        chain: HOLESKY.chain.clone(),
+        genesis: HOLESKY.genesis.clone(),
+        hardforks: HOLESKY.hardforks.clone(),
+        genesis_hash: Some(HOLESKY.genesis_hash()),
+        paris_block_and_final_difficulty: HOLESKY.paris_block_and_final_difficulty,
+        deposit_contract: HOLESKY.deposit_contract.clone(),
+        base_fee_params: HOLESKY.base_fee_params.clone(),
+        prune_delete_limit: HOLESKY.prune_delete_limit,
+    })
+}
+
+pub fn get_tx_env_reth(tx_signed: TransactionSigned) -> reth_revm::primitives::TxEnv {
+    let mut tx_env = reth_revm::primitives::TxEnv::default();
+
+    tx_env.caller = tx_signed.recover_signer().unwrap();
+
+    match tx_signed.as_ref() {
+        Transaction::Legacy(tx) => {
+            tx_env.gas_limit = tx.gas_limit;
+            tx_env.gas_price = U256::from(tx.gas_price);
+            tx_env.gas_priority_fee = None;
+            tx_env.transact_to = match tx.to {
+                TxKind::Call(to) => TxKind::Call(to),
+                TxKind::Create => TxKind::Create,
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = tx.chain_id;
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list.clear();
+            tx_env.blob_hashes.clear();
+            tx_env.max_fee_per_blob_gas.take();
+        }
+        Transaction::Eip2930(tx) => {
+            tx_env.gas_limit = tx.gas_limit;
+            tx_env.gas_price = U256::from(tx.gas_price);
+            tx_env.gas_priority_fee = None;
+            tx_env.transact_to = match tx.to {
+                TxKind::Call(to) => TxKind::Call(to),
+                TxKind::Create => TxKind::Create,
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx
+                .access_list
+                .0
+                .iter()
+                .map(|l| {
+                    (
+                        l.address,
+                        l.storage_keys
+                            .iter()
+                            .map(|k| U256::from_be_bytes(k.0))
+                            .collect(),
+                    )
+                })
+                .collect();
+            tx_env.blob_hashes.clear();
+            tx_env.max_fee_per_blob_gas.take();
+        }
+        Transaction::Eip1559(tx) => {
+            tx_env.gas_limit = tx.gas_limit;
+            tx_env.gas_price = U256::from(tx.max_fee_per_gas);
+            tx_env.gas_priority_fee = Some(U256::from(tx.max_priority_fee_per_gas));
+            tx_env.transact_to = match tx.to {
+                TxKind::Call(to) => TxKind::Call(to),
+                TxKind::Create => TxKind::Create,
+            };
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx
+                .access_list
+                .0
+                .iter()
+                .map(|l| {
+                    (
+                        l.address,
+                        l.storage_keys
+                            .iter()
+                            .map(|k| U256::from_be_bytes(k.0))
+                            .collect(),
+                    )
+                })
+                .collect();
+            tx_env.blob_hashes.clear();
+            tx_env.max_fee_per_blob_gas.take();
+        }
+        Transaction::Eip4844(tx) => {
+            tx_env.gas_limit = tx.gas_limit;
+            tx_env.gas_price = U256::from(tx.max_fee_per_gas);
+            tx_env.gas_priority_fee = Some(U256::from(tx.max_priority_fee_per_gas));
+            tx_env.transact_to = TxKind::Call(tx.to);
+            tx_env.value = tx.value;
+            tx_env.data = tx.input.clone();
+            tx_env.chain_id = Some(tx.chain_id);
+            tx_env.nonce = Some(tx.nonce);
+            tx_env.access_list = tx
+                .access_list
+                .0
+                .iter()
+                .map(|l| {
+                    (
+                        l.address,
+                        l.storage_keys
+                            .iter()
+                            .map(|k| U256::from_be_bytes(k.0))
+                            .collect(),
+                    )
+                })
+                .collect();
+            tx_env.blob_hashes.clone_from(&tx.blob_versioned_hashes);
+            tx_env.max_fee_per_blob_gas = Some(U256::from(tx.max_fee_per_blob_gas));
+        }
+    }
+    tx_env
 }

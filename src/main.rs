@@ -1,6 +1,5 @@
 use log::info;
-use pbb_poc::lighthouse::BeaconEventsConfig;
-use pbb_poc::pbb::run;
+use pbb_poc::pbb::run_pevm;
 use reth_primitives::TransactionSigned;
 use serde::{Deserialize, Serialize};
 
@@ -15,10 +14,7 @@ async fn main() {
         .expect("Failed to send RPC request")
         .result;
 
-    let beacon_client = BeaconEventsConfig::new();
-    let payload_attrilbutes = beacon_client.run().await.unwrap().data.payload_attributes;
-
-    let pevm_result = run(txs, payload_attrilbutes);
+    let pevm_result = run_pevm(txs).await;
     match pevm_result {
         Ok(_) => info!("PBB PoC completed successfully"),
         Err(e) => info!("PBB PoC failed: {:?}", e),
