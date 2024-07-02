@@ -1,6 +1,13 @@
+use std::sync::Arc;
+
 use pevm::{EvmCode, TransactTo};
 use reth_primitives::revm_primitives::Bytecode;
-use reth_primitives::{Transaction, TransactionSigned, TxKind, U256};
+use reth_primitives::{Bytes, JumpTable, Transaction, TransactionSigned, TxKind, U256};
+use reth_revm::interpreter::opcode;
+use reth_revm::primitives::bitvec::bitvec;
+use reth_revm::primitives::bitvec::order::Lsb0;
+use reth_revm::primitives::bitvec::vec::BitVec;
+use reth_revm::primitives::LegacyAnalyzedBytecode;
 
 pub fn get_tx_env(tx_signed: TransactionSigned) -> pevm::TxEnv {
     let mut tx_env = pevm::TxEnv::default();
@@ -113,12 +120,64 @@ pub fn get_tx_env(tx_signed: TransactionSigned) -> pevm::TxEnv {
 }
 
 pub fn bytecode_to_evmcode(code: Bytecode) -> EvmCode {
+    // convert code to LegacyAnalyzed if it is LegacyRaw by using to_analysed
+    let code = match code {
+        Bytecode::LegacyAnalyzed(_) => code,
+        Bytecode::LegacyRaw(_) => to_analysed(code),
+        _ => unreachable!(),
+    };
+
     match code {
         Bytecode::LegacyAnalyzed(code) => EvmCode {
             bytecode: code.bytecode().clone(),
             original_len: code.original_len(),
             jump_table: code.jump_table().clone().0,
         },
-        _ => unimplemented!(),
+        _ => unreachable!(),
     }
+}
+
+pub fn to_analysed(bytecode: Bytecode) -> Bytecode {
+    let (bytes, len) = match bytecode {
+        Bytecode::LegacyRaw(bytecode) => {
+            let len = bytecode.len();
+            let mut padded_bytecode = Vec::with_capacity(len + 33);
+            padded_bytecode.extend_from_slice(&bytecode);
+            padded_bytecode.resize(len + 33, 0);
+            (Bytes::from(padded_bytecode), len)
+        }
+        n => return n,
+    };
+    let jump_table = analyze(bytes.as_ref());
+
+    Bytecode::LegacyAnalyzed(LegacyAnalyzedBytecode::new(bytes, len, jump_table))
+}
+
+/// Analyze bytecode to build a jump map.
+fn analyze(code: &[u8]) -> JumpTable {
+    let mut jumps: BitVec<u8> = bitvec![u8, Lsb0; 0; code.len()];
+
+    let range = code.as_ptr_range();
+    let start = range.start;
+    let mut iterator = start;
+    let end = range.end;
+    while iterator < end {
+        let opcode = unsafe { *iterator };
+        if opcode::JUMPDEST == opcode {
+            // SAFETY: jumps are max length of the code
+            unsafe { jumps.set_unchecked(iterator.offset_from(start) as usize, true) }
+            iterator = unsafe { iterator.offset(1) };
+        } else {
+            let push_offset = opcode.wrapping_sub(opcode::PUSH1);
+            if push_offset < 32 {
+                // SAFETY: iterator access range is checked in the while loop
+                iterator = unsafe { iterator.offset((push_offset + 2) as isize) };
+            } else {
+                // SAFETY: iterator access range is checked in the while loop
+                iterator = unsafe { iterator.offset(1) };
+            }
+        }
+    }
+
+    JumpTable(Arc::new(jumps))
 }
