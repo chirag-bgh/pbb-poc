@@ -119,25 +119,22 @@ pub fn get_tx_env(tx_signed: TransactionSigned) -> pevm::TxEnv {
     tx_env
 }
 
-pub fn bytecode_to_evmcode(code: Bytecode) -> EvmCode {
+pub fn bytecode_to_evmcode(bytecode: Bytecode) -> EvmCode {
     // convert code to LegacyAnalyzed if it is LegacyRaw by using to_analysed
-    let code = match code {
-        Bytecode::LegacyAnalyzed(_) => code,
-        Bytecode::LegacyRaw(_) => to_analysed(code),
+    let code = match bytecode {
+        Bytecode::LegacyAnalyzed(code) => code,
+        Bytecode::LegacyRaw(_) => to_analysed(bytecode),
         _ => unreachable!(),
     };
 
-    match code {
-        Bytecode::LegacyAnalyzed(code) => EvmCode {
-            bytecode: code.bytecode().clone(),
-            original_len: code.original_len(),
-            jump_table: code.jump_table().clone().0,
-        },
-        _ => unreachable!(),
+    EvmCode {
+        bytecode: code.bytecode().clone(),
+        original_len: code.original_len(),
+        jump_table: code.jump_table().clone().0,
     }
 }
 
-pub fn to_analysed(bytecode: Bytecode) -> Bytecode {
+pub fn to_analysed(bytecode: Bytecode) -> LegacyAnalyzedBytecode {
     let (bytes, len) = match bytecode {
         Bytecode::LegacyRaw(bytecode) => {
             let len = bytecode.len();
@@ -146,11 +143,11 @@ pub fn to_analysed(bytecode: Bytecode) -> Bytecode {
             padded_bytecode.resize(len + 33, 0);
             (Bytes::from(padded_bytecode), len)
         }
-        n => return n,
+        _ => unreachable!(),
     };
     let jump_table = analyze(bytes.as_ref());
 
-    Bytecode::LegacyAnalyzed(LegacyAnalyzedBytecode::new(bytes, len, jump_table))
+    LegacyAnalyzedBytecode::new(bytes, len, jump_table)
 }
 
 /// Analyze bytecode to build a jump map.
